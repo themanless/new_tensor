@@ -4,6 +4,7 @@
 #include "CTensor.h"
 #include <assert.h>
 #include <math.h>
+#include "Msvd.h"
 class CTensor;
 
 class Tensor
@@ -23,17 +24,19 @@ public:
     int getM() {return m_m;}
     int getN() {return m_n;}
     int getK() {return m_k;}
+    double *getArray() {return m_array;}
     double& operator()(int m, int n, int k);
     const double& operator()(int m, int n, int k) const;
     friend bool& operator==(Tensor &t1, Tensor &t2);
     Tensor getlaslice(int n);
-    CTensor Tfft();
-    Tensor Tprod(Tensor &t2);
+    void  Tfft(CTensor &tf);
+    Tensor Trans();
+    void Tprod(Tensor t2, Tensor &t);
     double norm2();
-    Tensor Tinnpro(Tensor &t2);
-    bool Tort(Tensor &t2);
-    void Tsvd(Tensor U, Tensor S, Tensor V);
-    Tensor Tinv();
+    void Tinnpro(Tensor &t2, Tensor &t);
+    //bool Tort(Tensor &t2);
+    void Tsvd(Tensor &U, Tensor &S, Tensor &V);
+//    Tensor Tinv();
     ~Tensor()
     {
         delete[] m_array;

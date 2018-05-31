@@ -16,7 +16,7 @@ std::ostream& operator<< (std::ostream &out, const CTensor &tensor)
         for (int j = 0; j < tensor.m_m; j++)
         {
             for (int z = 0; z < tensor.m_n; z++)
-                out << tensor.m_array[i*tensor.m_m*tensor.m_n + j*tensor.m_n + z].x << "+" << tensor.m_array[i*tensor.m_m*tensor.m_n + j*tensor.m_n + z].y << "i ";
+                out << tensor(j, z, i).x << "+" << tensor(j, z, i).y << "i ";
             out << "\n" ;
         }
         out << "----------------------------------" << " \n";
@@ -25,13 +25,13 @@ std::ostream& operator<< (std::ostream &out, const CTensor &tensor)
 }
 cufftComplex& CTensor::operator()(int m, int n, int k)
 {
-    return m_array[k*m_m*m_n + m*m_n + n];
+    return m_array[k*m_m*m_n + n*m_m + m];
 }
 const cufftComplex& CTensor::operator()(int m, int n, int k) const
 {
-    return m_array[k*m_m*m_n + m*m_n + n];
+    return m_array[k*m_m*m_n + n*m_m + m];
 }
-Tensor CTensor::Tifft()
+void CTensor::Tifft(Tensor &t)
 {
     int m = m_m;
     int n = m_n;
@@ -56,16 +56,13 @@ Tensor CTensor::Tifft()
     cufftDestroy(plan);
     cudaFree(d_fftData);
 //transform
-    Tensor t(m, n, l);
-    for(int i=0; i<m; i++)
-        for(int j=0; j<n; j++)
-            for (int k=0; k<l; k++)
-            {
-                t(i, j, k) = t_f[(i*n+j)*l +k].x/l;
-            }
+    double *tA = t.getArray();
+     for(int i=0;i<bat;i++)
+        for(int j=0;j<l;j++){
+            tA[j*bat+i]=t_f[i*l+j].x/l;
+             }
     delete[] t_f;
     t_f = nullptr;
-    return t;
 }
 CTensor CTensor::Trans()
 {
@@ -74,8 +71,8 @@ CTensor t(m_n, m_m, m_k);
         for (int j; j<m_m; j++)
             for (int z; z<m_n; z++)
             {
-                t(z, j, i).x = *this(j, z, i).x;
-                t(z, j, i).y = 0.0 - *this(j, z, i).y;
+                t(z, j, i).x = (*this)(j, z, i).x;
+                t(z, j, i).y = 0.0 - (*this)(j, z, i).y;
             }
 
 }
@@ -83,4 +80,10 @@ void mul_cufft(cufftComplex &a,cufftComplex &b,cufftComplex &c){
   c.x += a.x*b.x - a.y*b.y;
   c.y += a.x*b.y + a.y*b.x;
 }
+
+
+
+
+
+
 

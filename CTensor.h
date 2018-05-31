@@ -19,14 +19,14 @@ public:
 
     friend std::ostream& operator<< (std::ostream &out, const CTensor &tensor);
 
+    cufftComplex *getArray() {return m_array;}
     int getM() {return m_m;}
     int getN() {return m_n;}
     int getK() {return m_k;}
     cufftComplex& operator()(int m, int n, int k);
     const cufftComplex& operator()(int m, int n, int k) const;
-    Tensor &Tifft();
+    void Tifft(Tensor &t);
     CTensor Trans();
-
     ~CTensor()
     {
         delete[] m_array;

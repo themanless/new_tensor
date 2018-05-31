@@ -39,7 +39,7 @@ std::ostream& operator<< (std::ostream &out, const Tensor &tensor)
         for (int j = 0; j < tensor.m_m; j++)
         {
             for (int z = 0; z < tensor.m_n; z++)
-                out << tensor.m_array[i*tensor.m_m*tensor.m_n + j*tensor.m_n + z] << " ";
+                out << tensor(j, z, i) << " ";
             out << "\n" ;
         }
         out << "----------------------------------" << " \n";
@@ -49,17 +49,17 @@ std::ostream& operator<< (std::ostream &out, const Tensor &tensor)
 
 double& Tensor::operator()(int m, int n, int k)
 {
-    return m_array[k*m_m*m_n + m*m_n + n];
+    return m_array[k*m_m*m_n + n*m_m + m];
 }
 const double& Tensor::operator()(int m, int n, int k) const
 {
-    return m_array[k*m_m*m_n + m*m_n + n];
+    return m_array[k*m_m*m_n + n*m_m + m];
 }
-bool operator==(Tensor &t1, Tensor &t2)
+bool& operator==(Tensor &t1, Tensor &t2)
 {
     bool flag = true;
     int i = 0;
-    while (i < t1.m_m * t1.m_n * t.m_k)
+    while (i < t1.m_m * t1.m_n * t1.m_k)
     {
         if (abs(t1.m_array[i] - t2.m_array[i]) <= 1E-4)
         {
@@ -74,10 +74,10 @@ Tensor Tensor::getlaslice(int n)
     Tensor slice(m_m, 1, m_k);
     for (int i=0; i<m_k; i++)
         for (int j=0; j<m_m; j++)
-            slice(j, 0, i) = *this(j,n,i);
+            slice(j, 0, i) = (*this)(j,n,i);
     return slice;
 }
-CTensor Tensor::Tfft()
+void Tensor::Tfft(CTensor &tf)
 {
     int m = m_m;
     int n = m_n;
@@ -103,17 +103,13 @@ CTensor Tensor::Tfft()
     cufftDestroy(plan);
     cudaFree(d_fftData);
 //transform
-    CTensor tf(m, n, l);
-    for(int i=0; i<m; i++)
-        for(int j=0; j<n; j++)
-            for (int k=0; k<l; k++)
-            {
-                tf(i, j, k) = t_f[(i*n+j)*l +k];
-            }
+    cufftComplex* tfA = tf.getArray();
+     for(int i=0;i<bat;i++)
+        for(int j=0;j<l;j++){
+            tfA[j*bat+i]=t_f[i*l+j];
+             }
     delete[] t_f;
     t_f = nullptr;
-    return tf;
-
 }
 Tensor Tensor::Trans()
 {
@@ -121,17 +117,21 @@ Tensor Tensor::Trans()
     for (int i; i<m_k; i++)
         for (int j; j<m_m; j++)
             for (int z; z<m_n; z++)
-                t(z, j, i) = *this(j, z, i);
+                t(z, j, i) = (*this)(j, z, i);
     return t;
 }
-Tensor Tensor::Tprod(Tensor &t2)
+void Tensor::Tprod(Tensor t2, Tensor &t)
 {
     int row = m_m;
     int rank = m_n;
     int tupe = m_k;
     int col = t2.getN();
-    CTensor t1f = this->Tfft();
-    CTensor t2f = t2.Tfft();
+    //CTensor t1f = this->Tfft();
+    CTensor t1f(m_m, m_n, m_k);
+    this->Tfft(t1f);
+    //CTensor t2f = t2.Tfft();
+    CTensor t2f(t2.getM(), t2.getN(), t2.getK());
+    t2.Tfft(t2f);
     CTensor Tf(row, col, tupe);
     //mul of Tensor
     for(int i=0; i<tupe;i++){
@@ -143,7 +143,7 @@ Tensor Tensor::Tprod(Tensor &t2)
       }
     }
   }
-    return (Tf.Tifft());
+    Tf.Tifft(t);
 }
 double Tensor::norm2()
 {
@@ -153,12 +153,12 @@ double Tensor::norm2()
     c = sqrt(c);
     return c;
 }
-Tensor Tensor::Tinnpro(Tensor &t2)
+void Tensor::Tinnpro(Tensor &t2, Tensor &t)
 {
     assert(m_n == 1 && t2.getN() == 1);
-    return (*this.Tprod(t2));
+    this->Tprod(t2, t);
 }
-bool Tensor::Tort()
+/*bool Tensor::Tort(Tensor &t2)
 {
     Tensor zero(1, 1, m_k);
     bool flag = true;
@@ -167,7 +167,7 @@ bool Tensor::Tort()
         {
             if (j==i)
             {
-                Tensor slice(*this.getlaslice(j));
+                Tensor slice(this->getlaslice(j));
                 Tensor iiinn = slice.Tprod(slice);
                 for (int z=1; z<m_k; z++)
                 {
@@ -180,8 +180,8 @@ bool Tensor::Tort()
             }
             else
             {
-                Tensor slicej(*this.getlaslice(j));
-                Tensor slicei(*this.getlaslice(i));
+                Tensor slicej(this->getlaslice(j));
+                Tensor slicei(this->getlaslice(i));
                 Tensor ijinn = slicej.Tprod(slicei);
                 for (int z=0; z<m_k; z++)
                 {
@@ -195,19 +195,51 @@ bool Tensor::Tort()
             }
         }
     return flag;
-}
+}*/
 void Tensor::Tsvd(Tensor &U, Tensor &S, Tensor &V)
 {
-
+    CTensor Tf(m_m, m_n, m_k);
+    (*this).Tfft(Tf);
+    std::cout << *this << "\n ts \n";
+    std::cout << Tf << "\n Tf \n";
+    std::cout << "======" << "\n";
+    cufftComplex *tp = Tf.getArray();
+    CTensor Uf(m_m, m_m, m_k);
+    cufftComplex *up = Uf.getArray();
+    CTensor Vf(m_n, m_n, m_k);
+    cufftComplex *vp = Vf.getArray();
+    CTensor Sf(m_m, m_n, m_k);
+    std::cout << "======" << "\n";
+    float vecs[m_n*m_k];
+    cudaStream_t streams[m_k];
+    for (int i=0; i<m_k; i++)
+    {
+        Msvd(tp+i*m_n*m_m, up+i*m_m*m_m, vp+i*m_n*m_n, vecs+i*m_n, m_m, m_n, streams, i);
+    }
+    for (int i=0; i<m_k; i++)
+    {
+        cudaStreamDestroy(streams[i]);
+    }
+    //copy vecs to sp
+    for (int i=0; i<m_k; i++)
+        for (int j=0; j<m_n; j++)
+            Sf(j, j, i).x = vecs[i*m_n + j];
+    std::cout << Uf << "\n Uf \n";
+    std::cout << Sf << "\n Sf \n";
+    std::cout << Vf << "\n Vf \n";
+    Uf.Tifft(U);
+    Sf.Tifft(S);
+    std::cout << S << "\n S \n";
+    Vf.Tifft(V);
 }
-Tensor Tensor::Tinv()
-{
-    Tensor U(m_m, m_m, m_k);
-    Tensor S(m_m, m_n, m_k);
-    Tensor V(m_n, m_n, m_k);
-    Tsvd(U, S, V);
-    invs(S);
-    Tensor US = U.Tprod(S);
-    return (US.Tprod(V));
+//Tensor Tensor::Tinv()
+//{
+    //Tensor U(m_m, m_m, m_k);
+    //Tensor S(m_m, m_n, m_k);
+    //Tensor V(m_n, m_n, m_k);
+    //Tsvd(U, S, V);
+    //invs(S);
+    //Tensor US = U.Tprod(S);
+    //return (US.Tprod(V));
 
-}
+//}

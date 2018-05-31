@@ -4,23 +4,33 @@
 
 int main()
 {
+    int m = 3;
+    int n = 2;
+    int k = 2;
     Tensor ts(3, 2, 2);
     ts(1,1,0) = 2.0;
     ts(2,1,0) = 2.0;
 
     ts(0,1,0) = 2.0;
     ts(1,1,1) = 1.0;
-    cudaDeviceReset();
-    Tensor t2(2, 3, 2);
-    t2(1,1,0) = 2.0;
-    t2(1,2,0) = 2.0;
+    //cudaDeviceReset();
 
-    t2(0,1,0) = 2.0;
-    t2(1,1,1) = 1.0;
+    Tensor U(m, m, k);
+    Tensor S(m, n, k);
+    Tensor V(n, n, k);
 
-    Tensor t(ts.Tprod(t2));
-    std::cout << ts << "\n" << t2 << "\n";
-    std::cout << t << "\n";
-    cudaDeviceReset();
+    std::cout << ts << "\n" ;
+    ts.Tsvd(U, S, V);
+    Tensor US(m, n, k);
+    U.Tprod(S, US);
+    Tensor USV(m, n, k);
+    US.Tprod(V, USV);
+    //Tensor US = U.Tprod(S);
+    //Tensor USV = US.Tprod(V);
+    std::cout << U << "\n U";
+    std::cout << S << "\n S";
+    std::cout << V << "\n V";
+    std::cout << USV << "\n USV";
+    //cudaDeviceReset();
     return 0;
 }
